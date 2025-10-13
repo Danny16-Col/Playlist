@@ -1,12 +1,13 @@
 import Playlist from '../models/Playlist.js';
+import AppError from '../utils/AppError.js';
 
 // create playlist
-export const createPlaylist = async (req, res) => {
+export const createPlaylist = async (req, res, next) => {
     try {
         const { title, description, song } = req.body;
 
         const exists = await Playlist.findOne({ title });
-        if (exists) return res.status(401).json({ message: 'Playlist already exists' });
+        if (exists) return next(new AppError('Playlist already exists',409))
 
         const playlist = await Playlist.create({
             title,
@@ -16,81 +17,83 @@ export const createPlaylist = async (req, res) => {
         });
         res.status(201).json(playlist);
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        next(error);
     }
 };
 
 // Playlist list
-export const getPlaylist = async (req, res) => {
+export const getPlaylist = async (req, res, next) => {
     try {
         const playlist = await Playlist.find().populate('author', 'username');
         res.json(playlist);
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        next(error);
     }
 };
 
 // Get playlist by ID
-export const getPlaylistByID = async (req, res) => {
+export const getPlaylistByID = async (req, res, next) => {
     try {
         const playlist = await Playlist.findById(req.params.id).populate('author', 'username');
-        if (!playlist) return res.status(404).json({ message: 'Playlist not found' });
+        if (!playlist) return next(new AppError('Playlist not found',404));
         res.json(playlist);
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        next(error);
     }
 };
 
 // Update playlist
-export const updatePlaylist = async (req, res) => {
+export const updatePlaylist = async (req, res, next) => {
     try {
         const playlist = await Playlist.findById(req.params.id);
-        if (!playlist) return res.status(404).json({ message: 'Playlist not found' });
+        if (!playlist) return next(new AppError('Playlist not found',404))
         if (playlist.author.toString() !== req.user._id.toString()) {
-            return res.status(403).json({ message: 'You cannot edit this playlist' });
+            return next(new AppError('You cannot edit this playlist',403));
         }
         Object.assign(playlist, req.body);
         await playlist.save();
-        res.json({ playlist });
+        res.json({ 
+            message:'Playlist updated successfully',
+            playlist });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        next(error);
     }
 };
 
 // Delete playlist
-export const deletePlaylist = async (req, res) => {
+export const deletePlaylist = async (req, res, next) => {
     try {
         const playlist = await Playlist.findById(req.params.id);
-        if (!playlist) return res.status(404).json({ message: 'Playlist not found' });
+        if (!playlist) return next(new AppError('Playlist not found',404))
         if (playlist.author.toString() !== req.user._id.toString()) {
-            return res.status(403).json({ message: 'you cannot delete this playlist' });
+            return next(new AppError('you cannot delete this playlist',403));
         }
         await playlist.deleteOne();
         res.json({ message: 'Playlist deleted successfully' });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        next(error);
     }
 };
 
 // vote playlist
-export const votePlaylist = async (req, res) => {
+export const votePlaylist = async (req, res, next) => {
     try {
         const playlist = await Playlist.findById(req.params.id);
-        if (!playlist) return res.status(404).json({ message: 'Playlist not found' });
-        if (playlist.voters.includes(req.user._id)) {
-            return res.status(400).json({ message: 'You voted for this playlist' });
+        if (!playlist) return next(new AppError('Playlist not found', 404))
+        if (playlist.voters.some(voter => voter.toString() === req.user._id.toString())) {
+            return next(new AppError('You already voted for this playlist',400));
         }
         playlist.votes += 1;
         playlist.voters.push(req.user._id);
         await playlist.save();
         res.json({ message: 'Registered vote', vote: playlist.voters });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        next(error);
     }
 };
 
 // get playlist ranking
-export const getRanking = async (req, res) => {
+export const getRanking = async (req, res, next) => {
     try {
         const ranking = await Playlist.find()
             .sort({ votes: -1 })
@@ -98,6 +101,6 @@ export const getRanking = async (req, res) => {
             .populate('author', 'username');
         res.json(ranking);
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        next(error);
     }
 };
